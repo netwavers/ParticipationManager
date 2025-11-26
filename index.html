@@ -281,7 +281,13 @@
                                 <label class="text-xs text-gray-500 mb-1 block">Join Keyword</label>
                                 <input type="text" v-model="joinKeyword"
                                     class="glass-input w-full rounded-lg px-3 py-2 text-xs font-mono"
-                                    placeholder="!join">
+                                    placeholder="参加希望">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-500 mb-1 block">Leave Keyword</label>
+                                <input type="text" v-model="leaveKeyword"
+                                    class="glass-input w-full rounded-lg px-3 py-2 text-xs font-mono"
+                                    placeholder="参加辞退">
                             </div>
 
                             <button @click="connectYouTube"
@@ -490,7 +496,8 @@
                 // Settings
                 const apiKey = ref('');
                 const videoId = ref('');
-                const joinKeyword = ref('!join');
+                const joinKeyword = ref('参加希望');
+                const leaveKeyword = ref('参加辞退');
                 const isConnected = ref(false);
                 const connectionError = ref('');
                 let pollingInterval = null;
@@ -525,7 +532,8 @@
                             finishedList.value = parsed.finishedList || [];
                             apiKey.value = parsed.apiKey || '';
                             videoId.value = parsed.videoId || '';
-                            joinKeyword.value = parsed.joinKeyword || '!join';
+                            joinKeyword.value = parsed.joinKeyword || '参加希望';
+                            leaveKeyword.value = parsed.leaveKeyword || '参加辞退';
                             sessionSize.value = (typeof parsed.sessionSize === 'number') ? parsed.sessionSize : 4;
                             timerDuration.value = (typeof parsed.timerDuration === 'number') ? parsed.timerDuration : 10;
                             timeRemaining.value = timerDuration.value * 60;
@@ -536,7 +544,7 @@
                 });
 
                 // Save to LocalStorage
-                watch([waitingQueue, currentSession, finishedList, apiKey, videoId, joinKeyword, sessionSize, timerDuration], () => {
+                watch([waitingQueue, currentSession, finishedList, apiKey, videoId, joinKeyword, leaveKeyword, sessionSize, timerDuration], () => {
                     localStorage.setItem('pm_data', JSON.stringify({
                         waitingQueue: waitingQueue.value,
                         currentSession: currentSession.value,
@@ -544,6 +552,7 @@
                         apiKey: apiKey.value,
                         videoId: videoId.value,
                         joinKeyword: joinKeyword.value,
+                        leaveKeyword: leaveKeyword.value,
                         sessionSize: sessionSize.value,
                         timerDuration: timerDuration.value
                     }));
@@ -663,6 +672,14 @@
 
                 const removeUser = (id) => {
                     waitingQueue.value = waitingQueue.value.filter(u => u.id !== id);
+                };
+
+                const removeUserByName = (name) => {
+                    // Remove from waiting queue only (not from current session)
+                    const beforeLength = waitingQueue.value.length;
+                    waitingQueue.value = waitingQueue.value.filter(u => u.name !== name);
+                    const afterLength = waitingQueue.value.length;
+                    return beforeLength !== afterLength; // Returns true if user was removed
                 };
 
                 // Session Logic
@@ -813,8 +830,14 @@
                             if (data.items) {
                                 data.items.forEach(item => {
                                     const message = item.snippet.displayMessage;
-                                    if (message.includes(joinKeyword.value)) {
-                                        const authorName = item.authorDetails.displayName;
+                                    const authorName = item.authorDetails.displayName;
+                                    
+                                    // Check for leave keyword first
+                                    if (message.includes(leaveKeyword.value)) {
+                                        removeUserByName(authorName);
+                                    }
+                                    // Then check for join keyword
+                                    else if (message.includes(joinKeyword.value)) {
                                         addUserCorrect(authorName);
                                     }
                                 });
@@ -861,6 +884,7 @@
                     apiKey,
                     videoId,
                     joinKeyword,
+                    leaveKeyword,
                     connectYouTube,
                     isConnected,
                     connectionError,
