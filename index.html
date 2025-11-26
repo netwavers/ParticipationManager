@@ -381,10 +381,16 @@
                                     <p class="text-xs text-gray-500">Playing now</p>
                                 </div>
                             </div>
-                            <button @click="endSession" :disabled="currentSession.length === 0"
-                                class="text-xs px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                End Session
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button @click="cancelSession" :disabled="currentSession.length === 0"
+                                    class="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Cancel
+                                </button>
+                                <button @click="endSession" :disabled="currentSession.length === 0"
+                                    class="text-xs px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    End Session
+                                </button>
+                            </div>
                         </div>
 
                         <div class="flex-1 overflow-y-auto p-4 space-y-2 relative min-h-[200px]">
@@ -713,6 +719,18 @@
                     stopTimer();
                 };
 
+                const cancelSession = () => {
+                    if (currentSession.value.length === 0) return;
+                    if (!confirm('Are you sure you want to cancel the current session? All players will return to the queue.')) return;
+
+                    const players = [...currentSession.value];
+                    players.forEach(p => {
+                        waitingQueue.value.push({ ...p, status: 'waiting' });
+                    });
+                    currentSession.value = [];
+                    resetTimer();
+                };
+
                 const moveToSession = (user) => {
                     removeUser(user.id);
                     currentSession.value.push({ ...user, status: 'playing' });
@@ -854,7 +872,8 @@
                     formatTime,
                     toggleTimer,
                     resetTimer,
-                    timerStarted
+                    timerStarted,
+                    cancelSession
                 };
             }
         }).mount('#app');
