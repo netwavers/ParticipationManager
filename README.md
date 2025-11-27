@@ -61,6 +61,23 @@ ParticipationManagerは、YouTube Liveのチャット参加者を管理し、セ
 4. **自動削除**: 視聴者がチャットで参加辞退キーワードを送信すると、待機キューから自動的に削除されます
    - 注意: 現在セッション中の参加者は削除されません（待機キューのみ対象）
 
+### Discord Bot連携
+
+Discord Bot (`ParticipationManagerBot`) と連携することで、Discordからの参加者も一元管理できます。
+
+1. **Botの準備**:
+   - `ParticipationManagerBot` を起動しておきます（`node index.js`）。
+   - Botが `http://localhost:3000` でAPIサーバーとして待機します。
+
+2. **Webアプリでの設定**:
+   - 画面左下の「Bot Integration」カードを探します。
+   - 「Enable Sync」スイッチをONにします。
+   - 接続が成功すると「Connected」と表示され、Botのデータ（待機列、セッション）がWebアプリに同期されます。
+
+3. **操作**:
+   - Webアプリで行う操作（追加、削除、セッション開始など）はすべてBotに送信され、Discord側にも即座に反映されます。
+   - YouTube Live連携で追加されたユーザーもBotに送信されるため、DiscordとYouTubeの参加者をまとめて管理できます。
+
 ### セッションタイマー
 
 1. **タイマー設定**: 「Timer (min)」で時間を設定（1〜60分）

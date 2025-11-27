@@ -303,6 +303,38 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Bot Integration Card -->
+                    <div class="glass-panel rounded-2xl p-5 animate-slide-up" style="animation-delay: 0.4s;">
+                        <h2
+                            class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <i class="ph ph-robot text-lg text-indigo-400"></i> Bot Integration
+                        </h2>
+
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-300">Enable Sync</span>
+                                <button @click="toggleBotSync" class="w-12 h-6 rounded-full transition-colors relative"
+                                    :class="isBotSyncEnabled ? 'bg-indigo-600' : 'bg-gray-700'">
+                                    <span
+                                        class="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+                                        :class="isBotSyncEnabled ? 'translate-x-6' : 'translate-x-0'"></span>
+                                </button>
+                            </div>
+                            <div v-if="isBotSyncEnabled">
+                                <label class="text-xs text-gray-500 mb-1 block">Bot API URL</label>
+                                <input type="text" v-model="botApiUrl"
+                                    class="glass-input w-full rounded-lg px-3 py-2 text-xs font-mono"
+                                    placeholder="http://localhost:3000">
+                                <div class="flex items-center gap-2 mt-2">
+                                    <div class="w-2 h-2 rounded-full"
+                                        :class="isBotConnected ? 'bg-green-500' : 'bg-red-500'"></div>
+                                    <span class="text-xs text-gray-400">{{ isBotConnected ? 'Connected' : 'Disconnected'
+                                        }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Center Column: Waiting Queue (5 cols) -->
@@ -503,6 +535,12 @@
                 let pollingInterval = null;
                 let nextPageToken = null;
 
+                // Bot Integration State
+                const isBotSyncEnabled = ref(false);
+                const botApiUrl = ref('http://localhost:3000');
+                const isBotConnected = ref(false);
+                let botPollingInterval = null;
+
                 // Helper
                 const compareUsers = (a, b) => {
                     const countA = a.playCount || 0;
@@ -537,6 +575,12 @@
                             sessionSize.value = (typeof parsed.sessionSize === 'number') ? parsed.sessionSize : 4;
                             timerDuration.value = (typeof parsed.timerDuration === 'number') ? parsed.timerDuration : 10;
                             timeRemaining.value = timerDuration.value * 60;
+                            isBotSyncEnabled.value = parsed.isBotSyncEnabled || false;
+                            botApiUrl.value = parsed.botApiUrl || 'http://localhost:3000';
+
+                            if (isBotSyncEnabled.value) {
+                                startBotSync();
+                            }
                         } catch (e) {
                             console.error("Failed to load data", e);
                         }
@@ -544,7 +588,7 @@
                 });
 
                 // Save to LocalStorage
-                watch([waitingQueue, currentSession, finishedList, apiKey, videoId, joinKeyword, leaveKeyword, sessionSize, timerDuration], () => {
+                watch([waitingQueue, currentSession, finishedList, apiKey, videoId, joinKeyword, leaveKeyword, sessionSize, timerDuration, isBotSyncEnabled, botApiUrl], () => {
                     localStorage.setItem('pm_data', JSON.stringify({
                         waitingQueue: waitingQueue.value,
                         currentSession: currentSession.value,
@@ -554,7 +598,9 @@
                         joinKeyword: joinKeyword.value,
                         leaveKeyword: leaveKeyword.value,
                         sessionSize: sessionSize.value,
-                        timerDuration: timerDuration.value
+                        timerDuration: timerDuration.value,
+                        isBotSyncEnabled: isBotSyncEnabled.value,
+                        botApiUrl: botApiUrl.value
                     }));
                 }, { deep: true });
 
@@ -629,9 +675,23 @@
                 });
 
                 // Actions
-                const addManualUser = () => {
+                const addManualUser = async () => {
                     if (!newUserName.value.trim()) return;
-                    addUserCorrect(newUserName.value.trim());
+
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/join`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name: newUserName.value.trim() })
+                            });
+                            // State will update on next poll
+                        } catch (e) {
+                            console.error("Bot add failed", e);
+                        }
+                    } else {
+                        addUserCorrect(newUserName.value.trim());
+                    }
                     newUserName.value = '';
                 };
 
@@ -670,8 +730,20 @@
                     }
                 };
 
-                const removeUser = (id) => {
-                    waitingQueue.value = waitingQueue.value.filter(u => u.id !== id);
+                const removeUser = async (id) => {
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/remove`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id })
+                            });
+                        } catch (e) {
+                            console.error("Bot remove failed", e);
+                        }
+                    } else {
+                        waitingQueue.value = waitingQueue.value.filter(u => u.id !== id);
+                    }
                 };
 
                 const removeUserByName = (name) => {
@@ -683,24 +755,36 @@
                 };
 
                 // Session Logic
-                const startSession = () => {
+                const startSession = async () => {
                     if (waitingQueue.value.length === 0) return;
 
-                    // End current session first
-                    endSession();
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/next`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ size: sessionSize.value })
+                            });
+                        } catch (e) {
+                            console.error("Bot next failed", e);
+                        }
+                    } else {
+                        // End current session first
+                        endSession();
 
-                    let size = parseInt(sessionSize.value);
-                    if (isNaN(size) || size < 1) size = 1;
+                        let size = parseInt(sessionSize.value);
+                        if (isNaN(size) || size < 1) size = 1;
 
-                    // Sort Queue before picking
-                    waitingQueue.value.sort(compareUsers);
+                        // Sort Queue before picking
+                        waitingQueue.value.sort(compareUsers);
 
-                    const count = Math.min(size, waitingQueue.value.length);
-                    const nextPlayers = waitingQueue.value.splice(0, count);
+                        const count = Math.min(size, waitingQueue.value.length);
+                        const nextPlayers = waitingQueue.value.splice(0, count);
 
-                    nextPlayers.forEach(p => {
-                        currentSession.value.push({ ...p, status: 'playing' });
-                    });
+                        nextPlayers.forEach(p => {
+                            currentSession.value.push({ ...p, status: 'playing' });
+                        });
+                    }
 
                     // Start Timer
                     resetTimer();
@@ -726,13 +810,24 @@
                     startTimer();
                 };
 
-                const endSession = () => {
-                    const players = [...currentSession.value];
-                    players.forEach(p => {
-                        const newCount = (p.playCount || 0) + 1;
-                        finishedList.value.unshift({ ...p, status: 'finished', playCount: newCount });
-                    });
-                    currentSession.value = [];
+                const endSession = async () => {
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/finish`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                        } catch (e) {
+                            console.error("Bot finish failed", e);
+                        }
+                    } else {
+                        const players = [...currentSession.value];
+                        players.forEach(p => {
+                            const newCount = (p.playCount || 0) + 1;
+                            finishedList.value.unshift({ ...p, status: 'finished', playCount: newCount });
+                        });
+                        currentSession.value = [];
+                    }
                     stopTimer();
                 };
 
@@ -768,12 +863,24 @@
                     waitingQueue.value.push({ ...user, status: 'waiting' });
                 };
 
-                const resetAll = () => {
+                const resetAll = async () => {
                     if (!confirm('Are you sure you want to reset all data?')) return;
-                    waitingQueue.value = [];
-                    currentSession.value = [];
-                    finishedList.value = [];
-                    sessionSize.value = 4;
+
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/reset`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                        } catch (e) {
+                            console.error("Bot reset failed", e);
+                        }
+                    } else {
+                        waitingQueue.value = [];
+                        currentSession.value = [];
+                        finishedList.value = [];
+                        sessionSize.value = 4;
+                    }
                 };
 
                 // YouTube Integration
@@ -831,14 +938,30 @@
                                 data.items.forEach(item => {
                                     const message = item.snippet.displayMessage;
                                     const authorName = item.authorDetails.displayName;
-                                    
-                                    // Check for leave keyword first
-                                    if (message.includes(leaveKeyword.value)) {
-                                        removeUserByName(authorName);
-                                    }
-                                    // Then check for join keyword
-                                    else if (message.includes(joinKeyword.value)) {
-                                        addUserCorrect(authorName);
+                                    const authorId = item.authorDetails.channelId;
+
+                                    if (message.includes(joinKeyword.value)) {
+                                        if (isBotSyncEnabled.value) {
+                                            // Send to Bot
+                                            fetch(`${botApiUrl.value}/api/join`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ name: authorName, id: authorId })
+                                            }).catch(e => console.error("YT Join sync failed", e));
+                                        } else {
+                                            addUserCorrect(authorName);
+                                        }
+                                    } else if (message.includes(leaveKeyword.value)) {
+                                        if (isBotSyncEnabled.value) {
+                                            // Send to Bot (Remove)
+                                            fetch(`${botApiUrl.value}/api/remove`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ id: authorId })
+                                            }).catch(e => console.error("YT Leave sync failed", e));
+                                        } else {
+                                            removeUserByName(authorName);
+                                        }
                                     }
                                 });
                             }
@@ -846,6 +969,45 @@
                             console.error('Polling error', e);
                         }
                     }, 5000);
+                };
+
+                // Bot Sync Logic
+                const toggleBotSync = () => {
+                    isBotSyncEnabled.value = !isBotSyncEnabled.value;
+                    if (isBotSyncEnabled.value) {
+                        startBotSync();
+                    } else {
+                        stopBotSync();
+                        isBotConnected.value = false;
+                    }
+                };
+
+                const startBotSync = () => {
+                    if (botPollingInterval) clearInterval(botPollingInterval);
+                    pollBot(); // Immediate
+                    botPollingInterval = setInterval(pollBot, 2000); // Poll every 2s
+                };
+
+                const stopBotSync = () => {
+                    if (botPollingInterval) clearInterval(botPollingInterval);
+                };
+
+                const pollBot = async () => {
+                    try {
+                        const res = await fetch(`${botApiUrl.value}/api/state`);
+                        if (!res.ok) throw new Error('Bot API error');
+                        const data = await res.json();
+
+                        // Sync State
+                        waitingQueue.value = data.waitingQueue || [];
+                        currentSession.value = data.currentSession || [];
+                        finishedList.value = data.finishedList || [];
+
+                        isBotConnected.value = true;
+                    } catch (e) {
+                        console.error("Bot Poll Error", e);
+                        isBotConnected.value = false;
+                    }
                 };
 
                 // Relative time helper
@@ -897,7 +1059,12 @@
                     toggleTimer,
                     resetTimer,
                     timerStarted,
-                    cancelSession
+                    cancelSession,
+                    // Bot Integration
+                    isBotSyncEnabled,
+                    botApiUrl,
+                    isBotConnected,
+                    toggleBotSync
                 };
             }
         }).mount('#app');
