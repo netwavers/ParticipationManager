@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParticipationManager OBS Overlay</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        dark: { 900: '#0a0a0a' }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: transparent;
+            /* Key for OBS */
+            overflow: hidden;
+        }
+
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+
+        /* Transitions */
+        .list-move,
+        .list-enter-active,
+        .list-leave-active {
+            transition: all 0.5s ease;
+        }
+
+        .list-enter-from,
+        .list-leave-to {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+
+        .list-leave-active {
+            position: absolute;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app" class="p-4 w-full h-screen flex flex-col gap-4">
+
+        <!-- Current Session -->
+        <div class="glass-panel p-4" v-if="currentSession.length > 0">
+            <h2 class="text-blue-400 font-bold text-lg mb-2 flex items-center gap-2">
+                <i class="ph-fill ph-game-controller"></i> Current Session
+                <span v-if="isTimerRunning" class="ml-auto text-white font-mono text-xl"
+                    :class="{'text-red-500 animate-pulse': timeRemaining < 60}">
+                    {{ formattedTime }}
+                </span>
+            </h2>
+            <div class="grid grid-cols-1 gap-2">
+                <div v-for="user in currentSession" :key="user.id"
+                    class="flex items-center gap-3 bg-white/5 p-2 rounded border border-white/5">
+                    <div
+                        class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                        {{ user.name.charAt(0).toUpperCase() }}
+                    </div>
+                    <span class="text-white font-medium truncate">{{ user.name }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Waiting Queue (Next Up) -->
+        <div class="glass-panel p-4" v-if="waitingQueue.length > 0">
+            <h2 class="text-purple-400 font-bold text-lg mb-2 flex items-center gap-2">
+                <i class="ph-fill ph-users"></i> Next Up
+                <span class="ml-auto text-xs text-gray-400 bg-white/10 px-2 py-1 rounded-full">
+                    Total: {{ waitingQueue.length }}
+                </span>
+            </h2>
+            <div class="space-y-2">
+                <transition-group name="list">
+                    <div v-for="(user, index) in nextUpList" :key="user.id"
+                        class="flex items-center gap-3 bg-white/5 p-2 rounded border border-white/5 opacity-80">
+                        <span class="text-gray-400 font-mono text-sm w-4">#{{ index + 1 }}</span>
+                        <span class="text-gray-200 truncate">{{ user.name }}</span>
+                    </div>
+                </transition-group>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentSession = ref([]);
+                const waitingQueue = ref([]);
+                const timeRemaining = ref(0);
+                const isTimerRunning = ref(false);
+                const timerDuration = ref(10);
+
+                // Derived state
+                const nextUpList = computed(() => {
+                    return waitingQueue.value.slice(0, 5); // Show top 5
+                });
+
+                const formattedTime = computed(() => {
+                    const m = Math.floor(timeRemaining.value / 60);
+                    const s = timeRemaining.value % 60;
+                    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                });
+
+                // BroadcastChannel
+                const channel = new BroadcastChannel('participation_manager');
+
+                channel.onmessage = (event) => {
+                    const data = event.data;
+                    if (data.type === 'STATE_UPDATE') {
+                        currentSession.value = data.currentSession || [];
+                        waitingQueue.value = data.waitingQueue || [];
+                        timeRemaining.value = data.timeRemaining || 0;
+                        isTimerRunning.value = data.isTimerRunning || false;
+                        timerDuration.value = data.timerDuration || 10;
+                    }
+                };
+
+                // Request initial state
+                onMounted(() => {
+                    channel.postMessage({ type: 'REQUEST_STATE' });
+                });
+
+                return {
+                    currentSession,
+                    waitingQueue,
+                    nextUpList,
+                    timeRemaining,
+                    isTimerRunning,
+                    formattedTime
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
