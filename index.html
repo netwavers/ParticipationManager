@@ -235,7 +235,7 @@
                         <div class="space-y-3">
                             <div>
                                 <label class="text-xs font-medium text-gray-500 mb-1 block">Timer Duration (min)</label>
-                                <input type="number" v-model="timerDuration"
+                                <input type="number" v-model.number="timerDuration" min="1"
                                     class="glass-input w-full rounded-lg px-3 py-2 text-sm">
                             </div>
                             <div>
@@ -538,8 +538,8 @@
                             videoId.value = parsed.videoId || '';
                             joinKeyword.value = parsed.joinKeyword || '参加希望';
                             leaveKeyword.value = parsed.leaveKeyword || '参加辞退';
-                            sessionSize.value = (typeof parsed.sessionSize === 'number') ? parsed.sessionSize : 4;
-                            timerDuration.value = (typeof parsed.timerDuration === 'number') ? parsed.timerDuration : 10;
+                            sessionSize.value = (typeof parsed.sessionSize === 'number') ? parsed.sessionSize : parseInt(parsed.sessionSize) || 4;
+                            timerDuration.value = (typeof parsed.timerDuration === 'number') ? parsed.timerDuration : parseInt(parsed.timerDuration) || 10;
                             timeRemaining.value = timerDuration.value * 60;
                             isBotSyncEnabled.value = parsed.isBotSyncEnabled || false;
                             botApiUrl.value = parsed.botApiUrl || 'http://localhost:3000';
