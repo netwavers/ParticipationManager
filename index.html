@@ -290,6 +290,19 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="pt-2 border-t border-white/5">
+                                <h3 class="text-xs font-medium text-gray-500 mb-2">Debug Tools</h3>
+                                <div class="space-y-2">
+                                    <input type="text" v-model="debugAuthor" placeholder="Debug Author"
+                                        class="glass-input w-full rounded-lg px-3 py-2 text-xs">
+                                    <textarea v-model="debugMessage" placeholder="Debug Message"
+                                        class="glass-input w-full rounded-lg px-3 py-2 text-xs h-16"></textarea>
+                                    <button @click="simulateChat"
+                                        class="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-xs transition-colors">
+                                        Simulate Chat
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -324,6 +337,22 @@
                                                     }}</span>
                                                 <span v-if="user.playCount > 0" class="text-yellow-500"><i
                                                         class="ph-fill ph-star"></i> {{ user.playCount }} plays</span>
+                                            </div>
+                                            <div v-if="user.helpDetails"
+                                                class="mt-2 text-xs bg-blue-500/10 border border-blue-500/20 rounded-lg p-2">
+                                                <div class="flex items-center gap-2 mb-1 text-blue-300 font-bold">
+                                                    <i class="ph-fill ph-info"></i> HELP希望
+                                                </div>
+                                                <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-400">
+                                                    <div><span class="text-gray-500">Rank:</span> {{
+                                                        user.helpDetails.worldRank }}</div>
+                                                    <div><span class="text-gray-500">UID:</span> {{ user.helpDetails.uid
+                                                        }}</div>
+                                                    <div class="col-span-2"><span class="text-gray-500">Content:</span>
+                                                        {{ user.helpDetails.content }}</div>
+                                                    <div class="col-span-2"><span class="text-gray-500">Listeners
+                                                            OK:</span> {{ user.helpDetails.listenersOk }}</div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -488,6 +517,10 @@
                 const timerStarted = ref(false); // To track if timer has ever started for alert styling
                 let timerInterval = null;
 
+                // Debug State
+                const debugAuthor = ref('DebugUser');
+                const debugMessage = ref('');
+
                 // Settings
                 const apiKey = ref('');
                 const videoId = ref('');
@@ -506,10 +539,20 @@
 
                 // Helper
                 const compareUsers = (a, b) => {
+                    // HELP Priority
+                    if (a.helpDetails && !b.helpDetails) return -1;
+                    if (!a.helpDetails && b.helpDetails) return 1;
+
                     const countA = a.playCount || 0;
                     const countB = b.playCount || 0;
                     if (countA !== countB) return countA - countB;
                     return new Date(a.joinedAt) - new Date(b.joinedAt);
+                };
+
+                const extractVideoId = (input) => {
+                    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+                    const match = input.match(regex);
+                    return match ? match[1] : input;
                 };
 
                 // Computed
@@ -658,7 +701,7 @@
                     newUserName.value = '';
                 };
 
-                const addUserCorrect = (name) => {
+                const addUserCorrect = (name, helpDetails = null) => {
                     let playCount = 0;
                     const queueUser = waitingQueue.value.find(u => u.name === name);
                     if (queueUser) playCount = queueUser.playCount || 0;
@@ -669,7 +712,10 @@
 
                     const existingInQueueIndex = waitingQueue.value.findIndex(u => u.name === name);
                     if (existingInQueueIndex !== -1) {
-                        waitingQueue.value.splice(existingInQueueIndex, 1);
+                        if (helpDetails) {
+                            waitingQueue.value[existingInQueueIndex].helpDetails = helpDetails;
+                        }
+                        return;
                     }
 
                     const isPlaying = currentSession.value.some(u => u.name === name);
@@ -679,7 +725,8 @@
                             name: name,
                             status: 'waiting',
                             joinedAt: new Date().toISOString(),
-                            playCount: playCount
+                            playCount: playCount,
+                            helpDetails: helpDetails
                         });
                     }
                 };
@@ -725,9 +772,38 @@
                         endSession();
                         let size = parseInt(sessionSize.value);
                         if (isNaN(size) || size < 1) size = 1;
+
                         waitingQueue.value.sort(compareUsers);
-                        const count = Math.min(size, waitingQueue.value.length);
-                        const nextPlayers = waitingQueue.value.splice(0, count);
+
+                        // HELP Priority Logic
+                        const topUser = waitingQueue.value[0];
+                        const nextPlayers = [];
+
+                        if (topUser && topUser.helpDetails) {
+                            // First user is HELP -> pick ONLY this HELP user + fill with non-HELP
+                            const helpUser = waitingQueue.value.shift();
+                            nextPlayers.push(helpUser);
+
+                            // Fill remaining slots with non-HELP users
+                            let remainingSlots = size - 1;
+                            let i = 0;
+                            while (remainingSlots > 0 && i < waitingQueue.value.length) {
+                                if (!waitingQueue.value[i].helpDetails) {
+                                    const [picked] = waitingQueue.value.splice(i, 1);
+                                    nextPlayers.push(picked);
+                                    remainingSlots--;
+                                    // Don't increment i because array shifted
+                                } else {
+                                    i++;
+                                }
+                            }
+                        } else {
+                            // Normal logic
+                            const count = Math.min(size, waitingQueue.value.length);
+                            const picked = waitingQueue.value.splice(0, count);
+                            nextPlayers.push(...picked);
+                        }
+
                         nextPlayers.forEach(p => {
                             currentSession.value.push({ ...p, status: 'playing' });
                         });
@@ -829,9 +905,16 @@
                         connectionError.value = 'API Key and Video ID are required.';
                         return;
                     }
+
+                    const extractedId = extractVideoId(videoId.value);
+                    if (!extractedId || extractedId.length !== 11) {
+                        connectionError.value = 'Invalid Video ID or URL.';
+                        return;
+                    }
+
                     connectionError.value = '';
                     try {
-                        const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId.value}&key=${apiKey.value}`);
+                        const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${extractedId}&key=${apiKey.value}`);
                         const data = await response.json();
                         if (data.error) throw new Error(data.error.message);
                         if (data.items.length === 0) throw new Error('Video not found.');
@@ -857,25 +940,52 @@
                                 data.items.forEach(item => {
                                     const message = item.snippet.displayMessage;
                                     const authorName = item.authorDetails.displayName;
-                                    if (message.includes(joinKeyword.value)) {
-                                        if (isBotSyncEnabled.value) {
-                                            // Bot handles logic
-                                        } else {
-                                            addUserCorrect(authorName);
-                                        }
-                                    } else if (message.includes(leaveKeyword.value)) {
-                                        if (isBotSyncEnabled.value) {
-                                            // Bot handles logic
-                                        } else {
-                                            removeUserByName(authorName);
-                                        }
-                                    }
+                                    processMessage(authorName, message);
                                 });
                             }
                         } catch (e) {
                             console.error("Polling Error", e);
                         }
                     }, 5000);
+                };
+
+                const processMessage = (authorName, message) => {
+                    if (message.includes(joinKeyword.value)) {
+                        if (isBotSyncEnabled.value) {
+                            // Bot handles logic
+                        } else {
+                            addUserCorrect(authorName);
+                        }
+                    } else if (message.includes('HELP希望')) {
+                        // Parse HELP command
+                        const helpRegex = /HELP希望\s*世界ランク[：:]\s*(\d+)\s*UID[：:]\s*(\d+)\s*HELP内容[：:]\s*(.+?)\s*他のリスナーさんもいい[？?]\s*(Yes|No|yes|no)/i;
+                        const match = message.match(helpRegex);
+                        if (match) {
+                            const helpDetails = {
+                                worldRank: match[1],
+                                uid: match[2],
+                                content: match[3],
+                                listenersOk: match[4]
+                            };
+                            if (isBotSyncEnabled.value) {
+                                // Bot handles logic
+                            } else {
+                                addUserCorrect(authorName, helpDetails);
+                            }
+                        }
+                    } else if (message.includes(leaveKeyword.value)) {
+                        if (isBotSyncEnabled.value) {
+                            // Bot handles logic
+                        } else {
+                            removeUserByName(authorName);
+                        }
+                    }
+                };
+
+                const simulateChat = () => {
+                    if (!debugAuthor.value || !debugMessage.value) return;
+                    processMessage(debugAuthor.value, debugMessage.value);
+                    debugMessage.value = '';
                 };
 
                 // Bot Integration
@@ -989,7 +1099,12 @@
                     botApiUrl,
                     isBotConnected,
                     toggleBotSync,
-                    openObsOverlay
+                    toggleBotSync,
+                    openObsOverlay,
+                    // Debug
+                    debugAuthor,
+                    debugMessage,
+                    simulateChat
                 };
             }
         }).mount('#app');
