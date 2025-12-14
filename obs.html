@@ -60,47 +60,47 @@
     <div id="app" class="p-4 w-full h-screen flex flex-col gap-4">
 
         <!-- Current Session -->
-        <div class="glass-panel p-4" v-if="currentSession.length > 0">
-            <h2 class="text-blue-400 font-bold text-lg mb-2 flex items-center gap-2">
+        <div class="glass-panel p-3" v-if="currentSession.length > 0">
+            <h2 class="text-blue-400 font-bold text-base mb-2 flex items-center gap-2">
                 <i class="ph-fill ph-game-controller"></i> Current Session
-                <span v-if="isTimerRunning" class="ml-auto text-white font-mono text-xl"
+                <span v-if="isTimerRunning" class="ml-auto text-white font-mono text-lg"
                     :class="{'text-red-500 animate-pulse': timeRemaining < 60}">
                     {{ formattedTime }}
                 </span>
             </h2>
             <div class="grid grid-cols-1 gap-2">
                 <div v-for="user in currentSession" :key="user.id"
-                    class="flex items-center gap-3 bg-white/5 p-2 rounded border border-white/5">
+                    class="flex items-center gap-2 bg-white/5 p-1.5 rounded border border-white/5">
                     <div
-                        class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                        class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">
                         {{ user.name.charAt(0).toUpperCase() }}
                     </div>
                     <div class="flex flex-col overflow-hidden">
-                        <span class="text-white font-medium truncate">{{ user.name }}</span>
+                        <span class="text-white font-medium text-sm truncate">{{ user.name }}</span>
                         <span v-if="user.helpDetails"
-                            class="text-[10px] text-blue-300 font-bold bg-blue-900/50 px-1 rounded w-fit">HELP</span>
+                            class="text-[9px] text-blue-300 font-bold bg-blue-900/50 px-1 rounded w-fit">HELP</span>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Waiting Queue (Next Up) -->
-        <div class="glass-panel p-4" v-if="waitingQueue.length > 0">
-            <h2 class="text-purple-400 font-bold text-lg mb-2 flex items-center gap-2">
+        <div class="glass-panel p-3" v-if="waitingQueue.length > 0">
+            <h2 class="text-purple-400 font-bold text-base mb-2 flex items-center gap-2">
                 <i class="ph-fill ph-users"></i> Next Up
-                <span class="ml-auto text-xs text-gray-400 bg-white/10 px-2 py-1 rounded-full">
+                <span class="ml-auto text-[10px] text-gray-400 bg-white/10 px-1.5 py-0.5 rounded-full">
                     Total: {{ waitingQueue.length }}
                 </span>
             </h2>
-            <div class="space-y-2">
+            <div class="space-y-1.5">
                 <transition-group name="list">
                     <div v-for="(user, index) in nextUpList" :key="user.id"
-                        class="flex items-center gap-3 bg-white/5 p-2 rounded border border-white/5 opacity-80">
-                        <span class="text-gray-400 font-mono text-sm w-4">#{{ index + 1 }}</span>
+                        class="flex items-center gap-2 bg-white/5 p-1.5 rounded border border-white/5 opacity-80">
+                        <span class="text-gray-400 font-mono text-xs w-4">#{{ index + 1 }}</span>
                         <div class="flex flex-col overflow-hidden">
-                            <span class="text-gray-200 truncate">{{ user.name }}</span>
+                            <span class="text-gray-200 text-sm truncate">{{ user.name }}</span>
                             <span v-if="user.helpDetails"
-                                class="text-[10px] text-blue-300 font-bold bg-blue-900/50 px-1 rounded w-fit">HELP</span>
+                                class="text-[9px] text-blue-300 font-bold bg-blue-900/50 px-1 rounded w-fit">HELP</span>
                         </div>
                     </div>
                 </transition-group>
