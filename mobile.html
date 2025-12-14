@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PM Mobile</title>
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        gray: {
+                            850: '#1f2937',
+                            900: '#111827',
+                            950: '#030712',
+                        }
+                    },
+                    safe: {
+                        bottom: 'env(safe-area-inset-bottom)',
+                        top: 'env(safe-area-inset-top)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #030712;
+            /* gray-950 */
+            color: #f3f4f6;
+            /* gray-100 */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Safe area handling for iOS */
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .pt-safe {
+            padding-top: env(safe-area-inset-top);
+        }
+
+        /* Hide scrollbar but keep functionality */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .touch-action-manipulation {
+            touch-action: manipulation;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col h-screen overflow-hidden text-gray-100">
+    <div id="app" class="flex flex-col h-full">
+        <!-- Header -->
+        <header class="bg-gray-900 border-b border-gray-800 shrink-0 z-50 pt-safe">
+            <div class="h-14 px-4 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded bg-blue-600 flex items-center justify-center">
+                        <i class="ph-bold ph-users-three text-white text-lg"></i>
+                    </div>
+                    <h1 class="text-lg font-bold">PM Mobile</h1>
+                </div>
+                <!-- Mini Timer Display -->
+                <div v-if="currentSession.length > 0" class="font-mono font-bold text-lg tabular-nums"
+                    :class="{'text-red-400': timeRemaining < 60, 'text-gray-200': timeRemaining >= 60}">
+                    {{ formatTime(timeRemaining) }}
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto overflow-x-hidden p-4 pb-24 no-scrollbar">
+
+            <!-- SESSION TAB -->
+            <div v-show="activeTab === 'session'" class="space-y-6">
+                <!-- Timer Card -->
+                <div class="bg-gray-900/50 rounded-2xl p-6 border border-gray-800 flex flex-col items-center">
+                    <div class="text-5xl font-mono font-bold mb-6 tabular-nums"
+                        :class="{'text-red-400': timeRemaining < 60, 'text-white': timeRemaining >= 60}">
+                        {{ formatTime(timeRemaining) }}
+                    </div>
+                    <div class="flex items-center gap-4 w-full">
+                        <button @click="toggleTimer"
+                            class="flex-1 h-14 rounded-xl flex items-center justify-center gap-2 text-lg font-bold transition-all active:scale-95"
+                            :class="isTimerRunning ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-green-500/20 text-green-400 border border-green-500/30'">
+                            <i class="ph-fill text-xl" :class="isTimerRunning ? 'ph-pause' : 'ph-play'"></i>
+                            {{ isTimerRunning ? 'Pause' : 'Start' }}
+                        </button>
+                        <button @click="resetTimer"
+                            class="h-14 w-14 rounded-xl bg-gray-800 text-gray-400 flex items-center justify-center text-xl active:scale-95">
+                            <i class="ph-bold ph-arrow-counter-clockwise"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Session Controls -->
+                <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-400 font-medium">Session Size</span>
+                        <div class="flex items-center gap-4 bg-gray-800 rounded-lg p-1">
+                            <button @click="sessionSize = Math.max(1, sessionSize - 1)"
+                                class="w-10 h-10 flex items-center justify-center text-gray-400 active:bg-gray-700 rounded"><i
+                                    class="ph-bold ph-minus"></i></button>
+                            <span class="text-xl font-bold w-8 text-center">{{ sessionSize }}</span>
+                            <button @click="sessionSize++"
+                                class="w-10 h-10 flex items-center justify-center text-gray-400 active:bg-gray-700 rounded"><i
+                                    class="ph-bold ph-plus"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <button @click="startSession"
+                            class="bg-blue-600 active:bg-blue-700 text-white py-3 rounded-xl font-bold text-lg shadow-lg shadow-blue-900/20 active:scale-95 flex items-center justify-center gap-2">
+                            <i class="ph-bold ph-play"></i> Start
+                        </button>
+                        <button @click="pickRandomSession"
+                            class="bg-purple-600 active:bg-purple-700 text-white py-3 rounded-xl font-bold text-lg shadow-lg shadow-purple-900/20 active:scale-95 flex items-center justify-center gap-2">
+                            <i class="ph-bold ph-shuffle"></i> Random
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <button @click="endSession"
+                            class="bg-gray-800 active:bg-gray-700 text-red-400 border border-red-500/20 py-3 rounded-xl font-medium active:scale-95 flex items-center justify-center gap-2">
+                            <i class="ph-bold ph-stop"></i> End
+                        </button>
+                        <button @click="cancelSession"
+                            class="bg-gray-800 active:bg-gray-700 text-orange-400 border border-orange-500/20 py-3 rounded-xl font-medium active:scale-95 flex items-center justify-center gap-2">
+                            <i class="ph-bold ph-x"></i> Cancel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Players List -->
+                <div>
+                    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">Playing Now ({{
+                        currentSession.length }})</h2>
+                    <div class="space-y-3">
+                        <div v-for="user in currentSession" :key="user.id"
+                            class="bg-gray-800/50 border border-blue-500/20 rounded-xl p-4 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
+                                    {{ user.name.charAt(0).toUpperCase() }}
+                                </div>
+                                <div>
+                                    <div class="font-bold text-lg">{{ user.name }}</div>
+                                    <div class="text-xs text-blue-400 flex items-center gap-1">
+                                        <i class="ph-fill ph-game-controller"></i> Playing
+                                    </div>
+                                </div>
+                            </div>
+                            <button @click="finishUser(user)"
+                                class="w-10 h-10 rounded-full bg-gray-800 text-green-400 border border-gray-700 flex items-center justify-center active:bg-green-500 active:text-white transition-colors">
+                                <i class="ph-bold ph-check text-xl"></i>
+                            </button>
+                        </div>
+                        <div v-if="currentSession.length === 0" class="text-center py-8 text-gray-600">
+                            No active session
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QUEUE TAB -->
+            <div v-show="activeTab === 'queue'" class="space-y-4">
+                <!-- Manual Add -->
+                <div class="flex gap-2 mb-4">
+                    <input type="text" v-model="newUserName" @keyup.enter="addManualUser"
+                        class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-base focus:border-blue-500 focus:outline-none placeholder-gray-600"
+                        placeholder="Add player name...">
+                    <button @click="addManualUser"
+                        class="w-14 bg-blue-600 active:bg-blue-700 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-95">
+                        <i class="ph-bold ph-plus text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- List Info -->
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Waiting ({{
+                        waitingQueue.length }})</h2>
+                    <button @click="waitingQueue = []" v-if="waitingQueue.length > 0" class="text-xs text-red-500">Clear
+                        All</button>
+                </div>
+
+                <!-- Queue List -->
+                <div class="space-y-2">
+                    <div v-for="(user, index) in sortedWaitingQueue" :key="user.id"
+                        class="bg-gray-800/40 border border-gray-700/50 rounded-xl p-3 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-400">
+                                    {{ index + 1 }}
+                                </div>
+                                <div>
+                                    <div class="font-bold">{{ user.name }}</div>
+                                    <div class="text-xs text-gray-500 flex items-center gap-2">
+                                        <span><i class="ph-fill ph-clock"></i> {{ getRelativeTime(user.joinedAt)
+                                            }}</span>
+                                        <span v-if="user.playCount > 0" class="text-yellow-500"><i
+                                                class="ph-fill ph-star"></i> {{ user.playCount }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button @click="removeUser(user.id)" class="p-2 text-gray-500 active:text-red-400">
+                                <i class="ph-bold ph-x text-lg"></i>
+                            </button>
+                        </div>
+
+                        <!-- HELP Details Mobile View -->
+                        <div v-if="user.helpDetails"
+                            class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 text-xs text-gray-300 mt-1">
+                            <div class="flex items-center gap-1 text-blue-400 font-bold mb-1">
+                                <i class="ph-fill ph-info"></i> HELP REQ
+                            </div>
+                            <div class="grid grid-cols-2 gap-1">
+                                <div><span class="text-gray-500">Rank:</span> {{ user.helpDetails.worldRank }}</div>
+                                <div><span class="text-gray-500">UID:</span> {{ user.helpDetails.uid }}</div>
+                                <div class="col-span-2 truncate"><span class="text-gray-500">Msg:</span> {{
+                                    user.helpDetails.content }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="waitingQueue.length === 0" class="text-center py-12 text-gray-600">
+                        <i class="ph ph-users text-4xl mb-2 block opacity-30"></i>
+                        Empty Queue
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTORY TAB -->
+            <div v-show="activeTab === 'history'" class="space-y-4">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">History ({{
+                        finishedList.length }})</h2>
+                    <button @click="finishedList = []" v-if="finishedList.length > 0"
+                        class="text-xs text-red-500">Clear</button>
+                </div>
+
+                <div class="space-y-2">
+                    <div v-for="user in finishedList" :key="user.id"
+                        class="bg-gray-800/40 border border-gray-700/50 rounded-xl p-3 flex items-center justify-between opacity-75">
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="w-8 h-8 rounded-full bg-gray-700 text-gray-500 flex items-center justify-center font-bold text-xs">
+                                <i class="ph-bold ph-check"></i>
+                            </div>
+                            <div>
+                                <div class="font-medium text-gray-300">{{ user.name }}</div>
+                                <div class="text-xs text-gray-500"><i class="ph-fill ph-star"></i> {{ user.playCount }}
+                                    plays</div>
+                            </div>
+                        </div>
+                        <button @click="returnToQueue(user)" class="p-2 text-yellow-600 active:text-yellow-400"
+                            title="Return">
+                            <i class="ph-bold ph-arrow-u-up-left text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SETTINGS TAB -->
+            <div v-show="activeTab === 'settings'" class="space-y-6">
+                <!-- Main Settings -->
+                <div class="space-y-4">
+                    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider px-1">General</h3>
+
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                        <div class="p-4 border-b border-gray-800">
+                            <label class="text-xs font-medium text-gray-500 block mb-1">Timer Duration (min)</label>
+                            <input type="number" v-model.number="timerDuration"
+                                class="bg-transparent w-full text-white focus:outline-none">
+                        </div>
+                        <div class="p-4 border-b border-gray-800">
+                            <label class="text-xs font-medium text-gray-500 block mb-1">YouTube API Key</label>
+                            <input type="password" v-model="apiKey"
+                                class="bg-transparent w-full text-white focus:outline-none placeholder-gray-700"
+                                placeholder="Enter API Key">
+                        </div>
+                        <div class="p-4 flex gap-2 items-center">
+                            <div class="flex-1">
+                                <label class="text-xs font-medium text-gray-500 block mb-1">Video ID</label>
+                                <input type="text" v-model="videoId"
+                                    class="bg-transparent w-full text-white focus:outline-none placeholder-gray-700"
+                                    placeholder="v=...">
+                            </div>
+                            <button @click="connectYouTube"
+                                class="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm">
+                                Connect
+                            </button>
+                        </div>
+                        <div v-if="connectionError" class="px-4 pb-4 text-xs text-red-500">{{ connectionError }}</div>
+                        <div v-if="isConnected" class="px-4 pb-4 text-xs text-green-500 flex items-center gap-2">
+                            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Connected to Chat
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                        <div class="p-4 border-b border-gray-800">
+                            <label class="text-xs font-medium text-gray-500 block mb-1">Join Keyword</label>
+                            <input type="text" v-model="joinKeyword"
+                                class="bg-transparent w-full text-white focus:outline-none">
+                        </div>
+                        <div class="p-4">
+                            <label class="text-xs font-medium text-gray-500 block mb-1">Leave Keyword</label>
+                            <input type="text" v-model="leaveKeyword"
+                                class="bg-transparent w-full text-white focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+                        <span class="text-sm font-medium">Reset All Data</span>
+                        <button @click="resetAll" class="text-red-500 font-medium text-sm">Reset</button>
+                    </div>
+                </div>
+
+                <!-- Bot Settings -->
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between px-1">
+                        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Bot Integration</h3>
+                        <button @click="toggleBotSync" class="w-10 h-6 rounded-full transition-colors relative"
+                            :class="isBotSyncEnabled ? 'bg-blue-600' : 'bg-gray-700'">
+                            <span class="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
+                                :class="isBotSyncEnabled ? 'translate-x-4' : 'translate-x-0'"></span>
+                        </button>
+                    </div>
+
+                    <div v-if="isBotSyncEnabled" class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                        <label class="text-xs font-medium text-gray-500 block mb-1">Bot API URL</label>
+                        <input type="text" v-model="botApiUrl"
+                            class="bg-transparent w-full text-white focus:outline-none mb-2">
+                        <div class="flex items-center gap-2 text-xs">
+                            <div class="w-2 h-2 rounded-full" :class="isBotConnected ? 'bg-green-500' : 'bg-red-500'">
+                            </div>
+                            <span class="text-gray-400">{{ isBotConnected ? 'Connected' : 'Disconnected' }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="h-8"></div><!-- Spacer -->
+            </div>
+
+        </main>
+
+        <!-- Tab Navigation -->
+        <nav
+            class="fixed bottom-0 w-full bg-gray-900 border-t border-gray-800 flex justify-around items-center h-20 pb-safe z-50">
+            <button @click="activeTab = 'session'"
+                class="flex flex-col items-center gap-1 w-full h-full justify-center active:bg-gray-800 transition-colors"
+                :class="activeTab === 'session' ? 'text-blue-500' : 'text-gray-500'">
+                <i class="text-2xl"
+                    :class="activeTab === 'session' ? 'ph-fill ph-game-controller' : 'ph-bold ph-game-controller'"></i>
+                <span class="text-[10px] font-medium">Session</span>
+            </button>
+
+            <button @click="activeTab = 'queue'"
+                class="flex flex-col items-center gap-1 w-full h-full justify-center active:bg-gray-800 transition-colors relative"
+                :class="activeTab === 'queue' ? 'text-blue-500' : 'text-gray-500'">
+                <i class="text-2xl" :class="activeTab === 'queue' ? 'ph-fill ph-users' : 'ph-bold ph-users'"></i>
+                <span class="text-[10px] font-medium">Queue</span>
+                <span v-if="waitingQueue.length > 0"
+                    class="absolute top-3 right-6 min-w-[16px] h-4 px-1 rounded-full bg-blue-600 text-white text-[10px] flex items-center justify-center font-bold">
+                    {{ waitingQueue.length }}
+                </span>
+            </button>
+
+            <button @click="activeTab = 'history'"
+                class="flex flex-col items-center gap-1 w-full h-full justify-center active:bg-gray-800 transition-colors"
+                :class="activeTab === 'history' ? 'text-blue-500' : 'text-gray-500'">
+                <i class="text-2xl"
+                    :class="activeTab === 'history' ? 'ph-fill ph-clock-counter-clockwise' : 'ph-bold ph-clock-counter-clockwise'"></i>
+                <span class="text-[10px] font-medium">History</span>
+            </button>
+
+            <button @click="activeTab = 'settings'"
+                class="flex flex-col items-center gap-1 w-full h-full justify-center active:bg-gray-800 transition-colors"
+                :class="activeTab === 'settings' ? 'text-blue-500' : 'text-gray-500'">
+                <i class="text-2xl" :class="activeTab === 'settings' ? 'ph-fill ph-gear' : 'ph-bold ph-gear'"></i>
+                <span class="text-[10px] font-medium">Settings</span>
+            </button>
+        </nav>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                // UI State
+                const activeTab = ref('session'); // session, queue, history, settings
+
+                // --- LOGIC FROM index.html START ---
+                // State
+                const waitingQueue = ref([]);
+                const currentSession = ref([]);
+                const finishedList = ref([]);
+                const newUserName = ref('');
+                const sessionSize = ref(4);
+
+                // Timer State
+                const timerDuration = ref(10); // minutes
+                const timeRemaining = ref(600); // seconds
+                const isTimerRunning = ref(false);
+                const timerStarted = ref(false);
+                let timerInterval = null;
+
+                // Debug State
+                const debugAuthor = ref('DebugUser');
+                const debugMessage = ref('');
+
+                // Settings
+                const apiKey = ref('');
+                const videoId = ref('');
+                const joinKeyword = ref('参加希望');
+                const leaveKeyword = ref('参加辞退');
+                const isConnected = ref(false);
+                const connectionError = ref('');
+                let pollingInterval = null;
+                let nextPageToken = null;
+
+                // Bot Integration State
+                const isBotSyncEnabled = ref(false);
+                const botApiUrl = ref('http://localhost:3000');
+                const isBotConnected = ref(false);
+                let botPollingInterval = null;
+
+                // Helper
+                const compareUsers = (a, b) => {
+                    // HELP Priority
+                    if (a.helpDetails && !b.helpDetails) return -1;
+                    if (!a.helpDetails && b.helpDetails) return 1;
+
+                    const countA = a.playCount || 0;
+                    const countB = b.playCount || 0;
+                    if (countA !== countB) return countA - countB;
+                    return new Date(a.joinedAt) - new Date(b.joinedAt);
+                };
+
+                const extractVideoId = (input) => {
+                    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+                    const match = input.match(regex);
+                    return match ? match[1] : input;
+                };
+
+                // Computed
+                const sortedWaitingQueue = computed(() => {
+                    return [...waitingQueue.value].sort(compareUsers);
+                });
+
+                // Load from LocalStorage
+                onMounted(() => {
+                    const savedData = localStorage.getItem('pm_data');
+
+                    if (savedData) {
+                        try {
+                            const parsed = JSON.parse(savedData);
+                            waitingQueue.value = parsed.waitingQueue || [];
+
+                            if (parsed.currentPlayer) {
+                                currentSession.value = [parsed.currentPlayer];
+                            } else {
+                                currentSession.value = parsed.currentSession || [];
+                            }
+
+                            finishedList.value = parsed.finishedList || [];
+                            apiKey.value = parsed.apiKey || '';
+                            videoId.value = parsed.videoId || '';
+                            joinKeyword.value = parsed.joinKeyword || '参加希望';
+                            leaveKeyword.value = parsed.leaveKeyword || '参加辞退';
+                            sessionSize.value = (typeof parsed.sessionSize === 'number') ? parsed.sessionSize : parseInt(parsed.sessionSize) || 4;
+                            timerDuration.value = (typeof parsed.timerDuration === 'number') ? parsed.timerDuration : parseInt(parsed.timerDuration) || 10;
+                            timeRemaining.value = timerDuration.value * 60;
+                            isBotSyncEnabled.value = parsed.isBotSyncEnabled || false;
+                            botApiUrl.value = parsed.botApiUrl || 'http://localhost:3000';
+
+                            if (isBotSyncEnabled.value) {
+                                startBotSync();
+                            }
+                        } catch (e) {
+                            console.error("Failed to load data", e);
+                        }
+                    }
+                });
+
+                // Save to LocalStorage
+                watch([waitingQueue, currentSession, finishedList, apiKey, videoId, joinKeyword, leaveKeyword, sessionSize, timerDuration, isBotSyncEnabled, botApiUrl], () => {
+                    localStorage.setItem('pm_data', JSON.stringify({
+                        waitingQueue: waitingQueue.value,
+                        currentSession: currentSession.value,
+                        finishedList: finishedList.value,
+                        apiKey: apiKey.value,
+                        videoId: videoId.value,
+                        joinKeyword: joinKeyword.value,
+                        leaveKeyword: leaveKeyword.value,
+                        sessionSize: sessionSize.value,
+                        timerDuration: timerDuration.value,
+                        isBotSyncEnabled: isBotSyncEnabled.value,
+                        botApiUrl: botApiUrl.value
+                    }));
+                }, { deep: true });
+
+                // Timer Logic
+                const formatTime = (seconds) => {
+                    const m = Math.floor(seconds / 60);
+                    const s = seconds % 60;
+                    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                };
+
+                const startTimer = () => {
+                    if (isTimerRunning.value) return;
+                    isTimerRunning.value = true;
+                    timerStarted.value = true;
+
+                    timerInterval = setInterval(() => {
+                        if (timeRemaining.value > 0) {
+                            timeRemaining.value--;
+                        } else {
+                            stopTimer();
+                            playAlert();
+                        }
+                    }, 1000);
+                };
+
+                const stopTimer = () => {
+                    isTimerRunning.value = false;
+                    if (timerInterval) clearInterval(timerInterval);
+                };
+
+                const resetTimer = () => {
+                    stopTimer();
+                    timeRemaining.value = timerDuration.value * 60;
+                    timerStarted.value = false;
+                };
+
+                const toggleTimer = () => {
+                    if (isTimerRunning.value) {
+                        stopTimer();
+                    } else {
+                        startTimer();
+                    }
+                };
+
+                const playAlert = () => {
+                    try {
+                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        oscillator.type = 'sine';
+                        oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+                        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime + 0.5);
+                        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 1);
+                        oscillator.start();
+                        oscillator.stop(audioCtx.currentTime + 1);
+                    } catch (e) {
+                        console.error("Audio play failed", e);
+                    }
+                    // For mobile, native alert might be annoying, maybe simple vibration?
+                    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                    alert("Time's Up!");
+                };
+
+                // Watch timerDuration
+                watch(timerDuration, (newVal) => {
+                    if (!isTimerRunning.value && !timerStarted.value) {
+                        timeRemaining.value = newVal * 60;
+                    }
+                });
+
+                // Actions
+                const addManualUser = async () => {
+                    if (!newUserName.value.trim()) return;
+
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/join`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name: newUserName.value.trim() })
+                            });
+                        } catch (e) {
+                            console.error("Bot add failed", e);
+                        }
+                    } else {
+                        addUserCorrect(newUserName.value.trim());
+                    }
+                    newUserName.value = '';
+                };
+
+                const addUserCorrect = (name, helpDetails = null) => {
+                    let playCount = 0;
+                    const queueUser = waitingQueue.value.find(u => u.name === name);
+                    if (queueUser) playCount = queueUser.playCount || 0;
+                    const sessionUser = currentSession.value.find(u => u.name === name);
+                    if (sessionUser) playCount = sessionUser.playCount || 0;
+                    const finishedUser = finishedList.value.find(u => u.name === name);
+                    if (finishedUser) playCount = finishedUser.playCount || 0;
+
+                    const existingInQueueIndex = waitingQueue.value.findIndex(u => u.name === name);
+                    if (existingInQueueIndex !== -1) {
+                        if (helpDetails) {
+                            waitingQueue.value[existingInQueueIndex].helpDetails = helpDetails;
+                        }
+                        return;
+                    }
+
+                    const isPlaying = currentSession.value.some(u => u.name === name);
+                    if (!isPlaying) {
+                        waitingQueue.value.push({
+                            id: Date.now() + Math.random(),
+                            name: name,
+                            status: 'waiting',
+                            joinedAt: new Date().toISOString(),
+                            playCount: playCount,
+                            helpDetails: helpDetails
+                        });
+                    }
+                };
+
+                const removeUser = async (id) => {
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/remove`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id })
+                            });
+                        } catch (e) {
+                            console.error("Bot remove failed", e);
+                        }
+                    } else {
+                        waitingQueue.value = waitingQueue.value.filter(u => u.id !== id);
+                    }
+                };
+
+                const removeUserByName = (name) => {
+                    const beforeLength = waitingQueue.value.length;
+                    waitingQueue.value = waitingQueue.value.filter(u => u.name !== name);
+                    const afterLength = waitingQueue.value.length;
+                    return beforeLength !== afterLength;
+                };
+
+                const startSession = async () => {
+                    if (waitingQueue.value.length === 0) return;
+
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/next`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ size: sessionSize.value })
+                            });
+                        } catch (e) {
+                            console.error("Bot next failed", e);
+                        }
+                    } else {
+                        endSession();
+                        let size = parseInt(sessionSize.value);
+                        if (isNaN(size) || size < 1) size = 1;
+
+                        waitingQueue.value.sort(compareUsers);
+
+                        // HELP Priority Logic
+                        const topUser = waitingQueue.value[0];
+                        const nextPlayers = [];
+
+                        if (topUser && topUser.helpDetails) {
+                            // First user is HELP -> pick ONLY this HELP user + fill with non-HELP
+                            const helpUser = waitingQueue.value.shift();
+                            nextPlayers.push(helpUser);
+
+                            // Fill remaining slots with non-HELP users
+                            let remainingSlots = size - 1;
+                            let i = 0;
+                            while (remainingSlots > 0 && i < waitingQueue.value.length) {
+                                if (!waitingQueue.value[i].helpDetails) {
+                                    const [picked] = waitingQueue.value.splice(i, 1);
+                                    nextPlayers.push(picked);
+                                    remainingSlots--;
+                                } else {
+                                    i++;
+                                }
+                            }
+                        } else {
+                            // Normal logic
+                            const count = Math.min(size, waitingQueue.value.length);
+                            const picked = waitingQueue.value.splice(0, count);
+                            nextPlayers.push(...picked);
+                        }
+
+                        nextPlayers.forEach(p => {
+                            currentSession.value.push({ ...p, status: 'playing' });
+                        });
+                    }
+                    resetTimer();
+                    startTimer();
+                };
+
+                const pickRandomSession = () => {
+                    if (waitingQueue.value.length === 0) return;
+                    let size = parseInt(sessionSize.value);
+                    if (isNaN(size) || size < 1) size = 1;
+                    const count = Math.min(size, waitingQueue.value.length);
+                    for (let i = 0; i < count; i++) {
+                        if (waitingQueue.value.length === 0) break;
+                        const index = Math.floor(Math.random() * waitingQueue.value.length);
+                        const [picked] = waitingQueue.value.splice(index, 1);
+                        currentSession.value.push({ ...picked, status: 'playing' });
+                    }
+                    resetTimer();
+                    startTimer();
+                };
+
+                const endSession = async () => {
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/finish`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                        } catch (e) {
+                            console.error("Bot finish failed", e);
+                        }
+                    } else {
+                        const players = [...currentSession.value];
+                        players.forEach(p => {
+                            const newCount = (p.playCount || 0) + 1;
+                            finishedList.value.unshift({ ...p, status: 'finished', playCount: newCount });
+                        });
+                        currentSession.value = [];
+                    }
+                    stopTimer();
+                };
+
+                const cancelSession = () => {
+                    if (currentSession.value.length === 0) return;
+                    if (!confirm('Cancel active session? players will return to queue.')) return;
+                    const players = [...currentSession.value];
+                    players.forEach(p => {
+                        waitingQueue.value.push({ ...p, status: 'waiting' });
+                    });
+                    currentSession.value = [];
+                    resetTimer();
+                };
+
+                const finishUser = (user) => {
+                    currentSession.value = currentSession.value.filter(u => u.id !== user.id);
+                    const newCount = (user.playCount || 0) + 1;
+                    finishedList.value.unshift({ ...user, status: 'finished', playCount: newCount });
+                };
+
+                const returnToQueue = (user) => {
+                    if (currentSession.value.find(u => u.id === user.id)) {
+                        currentSession.value = currentSession.value.filter(u => u.id !== user.id);
+                    } else {
+                        finishedList.value = finishedList.value.filter(u => u.id !== user.id);
+                    }
+                    waitingQueue.value.push({ ...user, status: 'waiting' });
+                };
+
+                const resetAll = async () => {
+                    if (!confirm('Reset all data?')) return;
+
+                    if (isBotSyncEnabled.value) {
+                        try {
+                            await fetch(`${botApiUrl.value}/api/reset`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+                        } catch (e) {
+                            console.error("Bot reset failed", e);
+                        }
+                    } else {
+                        waitingQueue.value = [];
+                        currentSession.value = [];
+                        finishedList.value = [];
+                        sessionSize.value = 4;
+                    }
+                };
+
+                // YouTube Integration
+                const connectYouTube = async () => {
+                    if (!apiKey.value || !videoId.value) {
+                        connectionError.value = 'Missing API Key or Video ID';
+                        return;
+                    }
+
+                    const extractedId = extractVideoId(videoId.value);
+                    if (!extractedId || extractedId.length !== 11) {
+                        connectionError.value = 'Invalid Video ID';
+                        return;
+                    }
+
+                    connectionError.value = '';
+                    try {
+                        const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${extractedId}&key=${apiKey.value}`);
+                        const data = await response.json();
+                        if (data.error) throw new Error(data.error.message);
+                        if (data.items.length === 0) throw new Error('Video not found.');
+                        const liveChatId = data.items[0].liveStreamingDetails?.activeLiveChatId;
+                        if (!liveChatId) throw new Error('No active live chat.');
+                        isConnected.value = true;
+                        startPolling(liveChatId);
+                    } catch (e) {
+                        connectionError.value = e.message;
+                        isConnected.value = false;
+                    }
+                };
+
+                const startPolling = (liveChatId) => {
+                    if (pollingInterval) clearInterval(pollingInterval);
+                    pollingInterval = setInterval(async () => {
+                        try {
+                            const url = `https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${liveChatId}&part=snippet,authorDetails&key=${apiKey.value}` + (nextPageToken ? `&pageToken=${nextPageToken}` : '');
+                            const response = await fetch(url);
+                            const data = await response.json();
+                            if (data.nextPageToken) nextPageToken = data.nextPageToken;
+                            if (data.items) {
+                                data.items.forEach(item => {
+                                    const message = item.snippet.displayMessage;
+                                    const authorName = item.authorDetails.displayName;
+                                    processMessage(authorName, message);
+                                });
+                            }
+                        } catch (e) {
+                            console.error("Polling Error", e);
+                        }
+                    }, 5000);
+                };
+
+                const processMessage = (authorName, message) => {
+                    if (message.includes(joinKeyword.value)) {
+                        if (isBotSyncEnabled.value) {
+                            // Bot handles logic
+                        } else {
+                            addUserCorrect(authorName);
+                        }
+                    } else if (message.includes('HELP希望')) {
+                        // Parse HELP command
+                        const helpRegex = /HELP希望\s*世界ランク[：:]\s*(\d+)\s*UID[：:]\s*(\d+)\s*HELP内容[：:]\s*(.+?)\s*他のリスナーさんもいい[？?]\s*(Yes|No|yes|no)/i;
+                        const match = message.match(helpRegex);
+                        if (match) {
+                            const helpDetails = {
+                                worldRank: match[1],
+                                uid: match[2],
+                                content: match[3],
+                                listenersOk: match[4]
+                            };
+                            if (isBotSyncEnabled.value) {
+                                // Bot handles
+                            } else {
+                                addUserCorrect(authorName, helpDetails);
+                            }
+                        }
+                    } else if (message.includes(leaveKeyword.value)) {
+                        if (isBotSyncEnabled.value) {
+                            // Bot handles
+                        } else {
+                            removeUserByName(authorName);
+                        }
+                    }
+                };
+
+                // Bot Integration
+                const toggleBotSync = () => {
+                    isBotSyncEnabled.value = !isBotSyncEnabled.value;
+                    if (isBotSyncEnabled.value) {
+                        startBotSync();
+                    } else {
+                        if (botPollingInterval) clearInterval(botPollingInterval);
+                        isBotConnected.value = false;
+                    }
+                };
+
+                const startBotSync = () => {
+                    if (botPollingInterval) clearInterval(botPollingInterval);
+                    pollBot();
+                    botPollingInterval = setInterval(pollBot, 2000);
+                };
+
+                const pollBot = async () => {
+                    try {
+                        const response = await fetch(`${botApiUrl.value}/api/state`);
+                        const data = await response.json();
+                        waitingQueue.value = data.waitingQueue || [];
+                        currentSession.value = data.currentSession || [];
+                        finishedList.value = data.finishedList || [];
+                        isBotConnected.value = true;
+                    } catch (e) {
+                        console.error("Bot Poll Error", e);
+                        isBotConnected.value = false;
+                    }
+                };
+
+                const getRelativeTime = (dateString) => {
+                    const date = new Date(dateString);
+                    const now = new Date();
+                    const diffInSeconds = Math.floor((now - date) / 1000);
+                    if (diffInSeconds < 60) return 'Just now';
+                    const diffInMinutes = Math.floor(diffInSeconds / 60);
+                    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+                    const diffInHours = Math.floor(diffInMinutes / 60);
+                    if (diffInHours < 24) return `${diffInHours}h ago`;
+                    return `${Math.floor(diffInHours / 24)}d ago`;
+                };
+
+                // ---- LOGIC END ----
+
+                return {
+                    activeTab,
+                    // State
+                    waitingQueue,
+                    sortedWaitingQueue,
+                    currentSession,
+                    finishedList,
+                    newUserName,
+                    sessionSize,
+                    timerDuration,
+                    timeRemaining,
+                    isTimerRunning,
+                    // Actions
+                    addManualUser,
+                    removeUser,
+                    startSession,
+                    endSession,
+                    pickRandomSession,
+                    finishUser,
+                    returnToQueue,
+                    cancelSession,
+                    resetAll,
+                    toggleTimer,
+                    resetTimer,
+                    // YouTube
+                    apiKey,
+                    videoId,
+                    joinKeyword,
+                    leaveKeyword,
+                    connectYouTube,
+                    isConnected,
+                    connectionError,
+                    // Bot
+                    isBotSyncEnabled,
+                    botApiUrl,
+                    isBotConnected,
+                    toggleBotSync,
+                    // Helper
+                    getRelativeTime,
+                    formatTime
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
