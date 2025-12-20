@@ -332,7 +332,12 @@
                                             {{ user.name.charAt(0).toUpperCase() }}
                                         </div>
                                         <div>
-                                            <div class="font-medium text-sm">{{ user.name }}</div>
+                                            <div class="font-medium text-sm flex items-center gap-2">
+                                                {{ user.name }}
+                                                <span v-if="user.isBeginner"
+                                                    class="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30 font-semibold">🔰
+                                                    Beginner</span>
+                                            </div>
                                             <div class="text-xs text-gray-500 flex items-center gap-2">
                                                 <span><i class="ph-fill ph-clock"></i> {{ getRelativeTime(user.joinedAt)
                                                     }}</span>
@@ -357,10 +362,19 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <button @click="removeUser(user.id)"
-                                        class="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-400 transition-all">
-                                        <i class="ph-bold ph-x"></i>
-                                    </button>
+                                    <div
+                                        class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button @click="toggleBeginner(user.id)"
+                                            class="p-1.5 text-gray-400 hover:text-green-400 transition-all"
+                                            :title="user.isBeginner ? 'Remove Beginner Mark' : 'Mark as Beginner'">
+                                            <i class="ph-bold"
+                                                :class="user.isBeginner ? 'ph-shield-check' : 'ph-shield'"></i>
+                                        </button>
+                                        <button @click="removeUser(user.id)"
+                                            class="p-1.5 text-gray-400 hover:text-red-400 transition-all">
+                                            <i class="ph-bold ph-x"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </transition-group>
                             <div v-if="waitingQueue.length === 0"
@@ -409,27 +423,33 @@
                                             {{ user.name.charAt(0).toUpperCase() }}
                                         </div>
                                         <div>
-                                            <div class="font-medium text-sm text-white">{{ user.name }}</div>
-                                            <div class="text-xs text-blue-300 flex items-center gap-2">
-                                                <span class="flex items-center gap-1"><i
-                                                        class="ph-fill ph-game-controller"></i> Playing</span>
+                                            <div>
+                                                <div class="font-medium text-sm text-white flex items-center gap-2">
+                                                    {{ user.name }}
+                                                    <span v-if="user.isBeginner"
+                                                        class="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30 font-semibold">🔰
+                                                        Beginner</span>
+                                                </div>
+                                                <div class="text-xs text-blue-300 flex items-center gap-2">
+                                                    <span class="flex items-center gap-1"><i
+                                                            class="ph-fill ph-game-controller"></i> Playing</span>
+                                                </div>
                                             </div>
                                         </div>
+                                        <div
+                                            class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button @click="finishUser(user)"
+                                                class="p-1.5 text-gray-400 hover:text-green-400 transition-colors"
+                                                title="Finish">
+                                                <i class="ph-bold ph-check"></i>
+                                            </button>
+                                            <button @click="returnToQueue(user)"
+                                                class="p-1.5 text-gray-400 hover:text-yellow-400 transition-colors"
+                                                title="Return to Queue">
+                                                <i class="ph-bold ph-arrow-u-up-left"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div
-                                        class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button @click="finishUser(user)"
-                                            class="p-1.5 text-gray-400 hover:text-green-400 transition-colors"
-                                            title="Finish">
-                                            <i class="ph-bold ph-check"></i>
-                                        </button>
-                                        <button @click="returnToQueue(user)"
-                                            class="p-1.5 text-gray-400 hover:text-yellow-400 transition-colors"
-                                            title="Return to Queue">
-                                            <i class="ph-bold ph-arrow-u-up-left"></i>
-                                        </button>
-                                    </div>
-                                </div>
                             </transition-group>
                             <div v-if="currentSession.length === 0"
                                 class="h-full flex flex-col items-center justify-center text-gray-500 gap-2">
@@ -544,10 +564,21 @@
                     if (a.helpDetails && !b.helpDetails) return -1;
                     if (!a.helpDetails && b.helpDetails) return 1;
 
+                    // Beginner Priority (within same category)
+                    if (a.isBeginner && !b.isBeginner) return -1;
+                    if (!a.isBeginner && b.isBeginner) return 1;
+
                     const countA = a.playCount || 0;
                     const countB = b.playCount || 0;
                     if (countA !== countB) return countA - countB;
                     return new Date(a.joinedAt) - new Date(b.joinedAt);
+                };
+
+                const toggleBeginner = (userId) => {
+                    const user = waitingQueue.value.find(u => u.id === userId);
+                    if (user) {
+                        user.isBeginner = !user.isBeginner;
+                    }
                 };
 
                 const extractVideoId = (input) => {
@@ -799,7 +830,7 @@
                                 }
                             }
                         } else {
-                            // Normal logic
+                            // Normal logic without HELP user at top
                             const count = Math.min(size, waitingQueue.value.length);
                             const picked = waitingQueue.value.splice(0, count);
                             nextPlayers.push(...picked);
@@ -842,7 +873,9 @@
                         const players = [...currentSession.value];
                         players.forEach(p => {
                             const newCount = (p.playCount || 0) + 1;
-                            finishedList.value.unshift({ ...p, status: 'finished', playCount: newCount });
+                            const finishedUser = { ...p, status: 'finished', playCount: newCount };
+                            delete finishedUser.isBeginner; // Remove beginner badge
+                            finishedList.value.unshift(finishedUser);
                         });
                         currentSession.value = [];
                     }
@@ -868,7 +901,9 @@
                 const finishUser = (user) => {
                     currentSession.value = currentSession.value.filter(u => u.id !== user.id);
                     const newCount = (user.playCount || 0) + 1;
-                    finishedList.value.unshift({ ...user, status: 'finished', playCount: newCount });
+                    const finishedUser = { ...user, status: 'finished', playCount: newCount };
+                    delete finishedUser.isBeginner; // Remove beginner badge
+                    finishedList.value.unshift(finishedUser);
                 };
 
                 const returnToQueue = (user) => {
@@ -1105,7 +1140,8 @@
                     // Debug
                     debugAuthor,
                     debugMessage,
-                    simulateChat
+                    simulateChat,
+                    toggleBeginner
                 };
             }
         }).mount('#app');
