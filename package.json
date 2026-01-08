@@ -22,12 +22,19 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "icon.ico"
+      "icon": "icon.ico",
+      "verifyUpdateCodeSignature": false
     },
     "mac": {
       "target": "dmg",
       "icon": "icon.icns"
     },
+    "extraResources": [
+      {
+        "from": "dist-py/pytchat_server.exe",
+        "to": "."
+      }
+    ],
     "files": [
       "**/*",
       "!dist/*",
